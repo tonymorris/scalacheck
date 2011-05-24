@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------*\
 **  ScalaCheck                                                             **
-**  Copyright (c) 2007-2010 Rickard Nilsson. All rights reserved.          **
+**  Copyright (c) 2007-2011 Rickard Nilsson. All rights reserved.          **
 **  http://www.scalacheck.org                                              **
 **                                                                         **
 **  This software is released under the terms of the Revised BSD License.  **
@@ -13,6 +13,7 @@ import Gen._
 import Prop._
 import Test._
 import Arbitrary._
+import collection.mutable.ListBuffer
 
 object TestSpecification extends Properties("Test") {
 
@@ -35,6 +36,29 @@ object TestSpecification extends Properties("Test") {
   } yield n/0
 
   val genException = forAll(undefinedInt)((n: Int) => true)
+
+  property("workers") = forAll { prms: Test.Params =>
+    var res = true
+    
+    val cb = new Test.TestCallback {
+      override def onPropEval(n: String, threadIdx: Int, s: Int, d: Int) = {
+        res = res && threadIdx >= 0 && threadIdx <= (prms.workers-1)
+      }
+    }
+
+    Test.check(prms.copy(testCallback = cb), passing).status match {
+      case Passed => res
+      case _ => false
+    }
+  }
+
+  property("size") = forAll { prms: Test.Params =>
+    val p = sizedProp { sz => sz >= prms.minSize && sz <= prms.maxSize }
+    Test.check(prms, p).status match {
+      case Passed => true
+      case _ => false
+    }
+  }
 
   property("propFailing") = forAll { prms: Test.Params =>
     Test.check(prms, failing).status match {
@@ -80,7 +104,7 @@ object TestSpecification extends Properties("Test") {
 
   property("propShrinked") = forAll { prms: Test.Params =>
     Test.check(prms, shrinked).status match {
-      case Failed(Arg(_,(x:Int,y:Int,z:Int),_,_)::Nil,_) => 
+      case Failed(Arg(_,(x:Int,y:Int,z:Int),_,_)::Nil,_) =>
         x == 0 && y == 0 && z == 0
       case x => false
     }
